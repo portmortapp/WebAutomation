@@ -1,0 +1,103 @@
+{
+  "name": "flowweb",
+  "productName": "FlowWeb",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "tsc --noEmit && electron-vite build",
+    "preview": "electron-vite preview",
+    "test": "npm run build && node --test tests/*.cjs",
+    "dist": "npm run build && electron-builder --win --linux",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:mac": "npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "mssql": "^11.0.1",
+    "mysql2": "^3.11.5",
+    "pg": "^8.13.1",
+    "playwright": "^1.50.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.4",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^34.2.0",
+    "electron-vite": "^3.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.portmort.flowweb",
+    "productName": "FlowWeb",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "icon": "resources/icon.ico",
+    "extraResources": [
+      { "from": "resources", "to": "." }
+    ],
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico",
+      "shortcutName": "FlowWeb"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "resources/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "resources/icon.png",
+      "category": "Utility",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  }
+}

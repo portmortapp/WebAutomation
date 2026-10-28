@@ -1,0 +1,36 @@
+const { chromium } = require('playwright');
+
+return await (async () => {
+  const browser = await chromium.launch({
+    headless: false
+  });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto('https://vadamap.ec.iau.ir/');
+  await page.getByRole('link', { name: ' قزوین  ۸ واحد ' }).click();
+  await page.getByRole('link', { name: ' واحد قزوین  ۴ پشتیبان ' }).click();
+  const page1Promise = page.waitForEvent('popup');
+  await page.getByRole('link', { name: ' نیمسال اول ۱۴۰۵-۱۴۰۶ ورود ' }).click();
+  const page1 = await page1Promise;
+  await page1.getByRole('textbox', { name: 'شماره دانشجویی' }).click();
+  await page1.getByRole('textbox', { name: 'شماره دانشجویی' }).click();
+  await page1.getByRole('textbox', { name: 'شماره دانشجویی' }).fill('1222222222222222225463');
+  await page1.getByRole('textbox', { name: 'رمز عبور' }).click();
+  await page1.getByRole('textbox', { name: 'رمز عبور' }).fill('422lgfdgdasol');
+  await page1.getByRole('button', { name: 'ورود به سامانه' }).click();
+  await page1.getByRole('link', { name: 'زبان انگلیسی عمومی-ترکیبی(3)' }).click();
+  await page1.getByRole('link', { name: 'ورود به کلاس' }).click();
+  await page1.getByText('You won\'t be able to share').click();
+  await page1.locator('iframe[name="html-meeting-view-frame"]').contentFrame().getByLabel('Close').click();
+  page1.once('dialog', dialog => {
+    console.log(`Dialog message: ${dialog.message()}`);
+    dialog.dismiss().catch(() => {});
+  });
+  await page1.locator('iframe[name="html-meeting-view-frame"]').contentFrame().getByRole('button', { name: 'Close' }).click();
+  await page1.close();
+  await page.close();
+
+  // ---------------------
+  await context.close();
+  await browser.close();
+})();

@@ -1,0 +1,91 @@
+# FlowWeb: the Electron app runs on the host (it needs a visible browser window for
+# login/recording). Docker provides n8n and, optionally, a database for the DB mirror.
+#
+#   docker compose up -d                          -> n8n only
+#   docker compose --profile postgres up -d       -> n8n + PostgreSQL
+#   docker compose --profile mysql up -d          -> n8n + MySQL
+#   docker compose --profile mssql up -d          -> n8n + SQL Server
+#
+# Copy .env.example to .env and set the passwords first.
+services:
+  n8n:
+    image: ${N8N_IMAGE:-docker.n8n.io/n8nio/n8n:latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
+    environment:
+      TZ: Asia/Tehran
+      GENERIC_TIMEZONE: Asia/Tehran
+      N8N_HOST: localhost
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+      N8N_EDITOR_BASE_URL: "http://localhost:${N8N_PORT:-5678}/"
+      WEBHOOK_URL: "http://localhost:${N8N_PORT:-5678}/"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+      NODE_ENV: production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5678/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  postgres:
+    profiles: ["postgres"]
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-flowweb}
+      POSTGRES_USER: ${DB_USER:-flowweb}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    profiles: ["mysql"]
+    image: mysql:8.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-flowweb}
+      MYSQL_USER: ${DB_USER:-flowweb}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mssql:
+    profiles: ["mssql"]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MSSQL_PORT:-1433}:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+volumes:
+  n8n_data:
+  postgres_data:
+  mysql_data:
+  mssql_data:

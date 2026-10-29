@@ -2,7 +2,7 @@
 
 <img src="resources/icon.png" alt="FlowWeb" width="120" />
 
-# FlowWeb
+# WebAutomation
 
 ### مرورگر خودکار، با دکمه‌ی «ضبط» و اتصال مستقیم به n8n
 

@@ -1,10 +1,11 @@
-# FlowWeb: the Electron app runs on the host (it needs a visible browser window for
+# webautomation: the Electron app runs on the host (it needs a visible browser window for
 # login/recording). Docker provides n8n and, optionally, a database for the DB mirror.
 #
 #   docker compose up -d                          -> n8n only
 #   docker compose --profile postgres up -d       -> n8n + PostgreSQL
 #   docker compose --profile mysql up -d          -> n8n + MySQL
 #   docker compose --profile mssql up -d          -> n8n + SQL Server
+#   docker compose --profile pgadmin up -d        -> n8n + PostgreSQL + pgAdmin (یا همراه با پروفایل postgres)
 #
 # Copy .env.example to .env and set the passwords first.
 services:
@@ -36,7 +37,7 @@ services:
       retries: 5
 
   postgres:
-    profiles: ["postgres"]
+    profiles: ["postgres", "pgadmin"]
     image: postgres:16-alpine
     restart: unless-stopped
     ports:
@@ -52,6 +53,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  pgadmin:
+    profiles: ["pgadmin"]
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?set PGADMIN_PASSWORD in .env}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
 
   mysql:
     profiles: ["mysql"]
@@ -89,3 +104,4 @@ volumes:
   postgres_data:
   mysql_data:
   mssql_data:
+  pgadmin_data:

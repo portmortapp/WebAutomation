@@ -1,8 +1,12 @@
 <div align="center">
 
-<img src="resources/icon.png" alt="FlowWeb" width="120" />
+<img src="resources/icon.png" alt="webautomation" width="120" />
 
+<<<<<<< HEAD
+# webautomation
+=======
 # WebAutomation
+>>>>>>> 0b916f0a655884304d4ca2d5ea0c3ef436fcd4b3
 
 ### مرورگر خودکار، با دکمه‌ی «ضبط» و اتصال مستقیم به n8n
 
@@ -14,9 +18,15 @@
 
 ---
 
+<<<<<<< HEAD
+## ✨ webautomation چیست؟
+
+کارهای تکراری داخل مرورگر را یک بار یاد بگیرید و هر وقت لازم شد اجرا کنید. webautomation صفحه‌ها را باز می‌کند، فرم پر می‌کند، دکمه می‌زند، داده می‌خواند، اسکرین‌شات می‌گیرد و نتیجه را برمی‌گرداند. همین کار را هم از رابط گرافیکی انجام می‌دهید و هم از n8n یا هر ابزار دیگری که بتواند HTTP بفرستد.
+=======
 ## ✨ WebAutomation چیست؟
 
 کارهای تکراری داخل مرورگر را یک بار یاد بگیرید و هر وقت لازم شد اجرا کنید. WebAutomation صفحه‌ها را باز می‌کند، فرم پر می‌کند، دکمه می‌زند، داده می‌خواند، اسکرین‌شات می‌گیرد و نتیجه را برمی‌گرداند. همین کار را هم از رابط گرافیکی انجام می‌دهید و هم از n8n یا هر ابزار دیگری که بتواند HTTP بفرستد.
+>>>>>>> 0b916f0a655884304d4ca2d5ea0c3ef436fcd4b3
 
 > کاری که امروز ۲۰ دقیقه دستی انجام می‌دهید، با یک کلیک یا یک فراخوانی API در چند ثانیه انجام می‌شود.
 
@@ -36,13 +46,15 @@
 
 **پیش‌نیاز:** Node.js نسخه‌ی ۲۰ یا بالاتر.
 
+> نصب‌کننده‌ی برنامه شامل مرورگر Chromium است و نصب آن به اینترنت نیاز ندارد. ساخت نصب‌کننده (`npm run dist:win`) فقط یک بار به اینترنت نیاز دارد تا مرورگر را دانلود و داخل نصب‌کننده قرار دهد.
+
 ```bash
 npm install
 npx playwright install chromium
 npm run dev
 ```
 
-پنجره‌ی FlowWeb باز می‌شود.
+پنجره‌ی webautomation باز می‌شود.
 
 > ⚠️ از `npm ci` استفاده نکنید؛ `npm install` را بزنید.
 
@@ -94,7 +106,7 @@ return { title, received: input };
 
 ## 🔗 API برای n8n و دیگر ابزارها
 
-FlowWeb یک API محلی دارد، پیش‌فرض `http://localhost:3434`. نمونه‌ی ساده:
+webautomation یک API محلی دارد، پیش‌فرض `http://localhost:3434`. نمونه‌ی ساده:
 
 ```bash
 curl -X POST http://localhost:3434/api/scenarios/SCENARIO_ID/run \
@@ -141,9 +153,9 @@ GitHub: [github.com/RasolAlibakhshi](https://github.com/RasolAlibakhshi)
 
 ## ❤️ حمایت از پروژه
 
-اگر FlowWeb در کارتان به شما کمک کرد، با یک دونیت به ادامه‌ی توسعه کمک کنید:
+اگر webautomation در کارتان به شما کمک کرد، با یک دونیت به ادامه‌ی توسعه کمک کنید:
 
-### [☕ حمایت مالی از FlowWeb](https://daramet.com/PortMort)
+### [☕ حمایت مالی از webautomation](https://daramet.com/PortMort)
 
 هر حمایتی انگیزه‌ی ادامه‌ی پروژه است. ممنون که هستید 🙏
 
@@ -151,6 +163,10 @@ GitHub: [github.com/RasolAlibakhshi](https://github.com/RasolAlibakhshi)
 
 <div align="center">
 
+<<<<<<< HEAD
+**webautomation** · powered by **portmort** · ساخته‌شده با ❤️ برای کسانی که وقتشان ارزش دارد
+=======
 **WebAutomation** · powered by **portmort** · ساخته‌شده با ❤️ برای کسانی که وقتشان ارزش دارد
+>>>>>>> 79370acfae3bd9d7d1ad4b08265e349beb9aca76
 
 </div>

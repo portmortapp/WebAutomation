@@ -1,6 +1,6 @@
 {
   "name": "flowweb",
-  "productName": "FlowWeb",
+  "productName": "webautomation",
   "version": "1.0.0",
   "private": true,
   "main": "./out/main/index.js",
@@ -9,10 +9,10 @@
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
     "test": "npm run build && node --test tests/*.cjs",
-    "dist": "npm run build && electron-builder --win --linux",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux",
-    "dist:mac": "npm run build && electron-builder --mac"
+    "dist": "npm run build && node scripts/fetch-browser.mjs && electron-builder --win --linux",
+    "dist:win": "npm run build && node scripts/fetch-browser.mjs && electron-builder --win",
+    "dist:linux": "npm run build && node scripts/fetch-browser.mjs && electron-builder --linux",
+    "dist:mac": "npm run build && node scripts/fetch-browser.mjs && electron-builder --mac"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -37,8 +37,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.portmort.flowweb",
-    "productName": "FlowWeb",
+    "appId": "com.portmort.webautomation",
+    "productName": "webautomation",
     "directories": {
       "output": "release"
     },
@@ -48,7 +48,14 @@
     ],
     "icon": "resources/icon.ico",
     "extraResources": [
-      { "from": "resources", "to": "." }
+      {
+        "from": "resources",
+        "to": "."
+      },
+      {
+        "from": "browsers",
+        "to": "browsers"
+      }
     ],
     "win": {
       "icon": "resources/icon.ico",
@@ -67,7 +74,7 @@
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
       "installerHeaderIcon": "resources/icon.ico",
-      "shortcutName": "FlowWeb"
+      "shortcutName": "webautomation"
     },
     "mac": {
       "category": "public.app-category.productivity",

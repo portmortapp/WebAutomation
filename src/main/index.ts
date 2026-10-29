@@ -1,6 +1,9 @@
 // src/main/index.ts
 import { app, BrowserWindow, Notification, ipcMain, Menu, Tray, nativeImage, shell, type IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
+import { configureBrowserPath, warnIfChromiumMissing } from './browser-setup'
+
+configureBrowserPath()
 import {
   deleteScenario,
   recoverInterruptedRuns,
@@ -61,7 +64,7 @@ function autoStartEnabled() {
 
 function buildTrayMenu() {
   return Menu.buildFromTemplate([
-    { label: 'نمایش FlowWeb', click: showWindow },
+    { label: 'نمایش webautomation', click: showWindow },
     { label: 'اجرا همراه ویندوز', type: 'checkbox', checked: autoStartEnabled(), click: item => {
       app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] })
       tray?.setContextMenu(buildTrayMenu())
@@ -79,7 +82,7 @@ function createTray() {
   const file = resourceFile(process.platform === 'win32' ? 'tray.ico' : 'tray.png')
   const image = nativeImage.createFromPath(file)
   tray = new Tray(process.platform === 'win32' ? image : image.resize({ width: 22, height: 22 }))
-  tray.setToolTip('FlowWeb - در حال اجرا در پس‌زمینه')
+  tray.setToolTip('webautomation - در حال اجرا در پس‌زمینه')
   tray.setContextMenu(buildTrayMenu())
   tray.on('click', showWindow)
   tray.on('double-click', showWindow)
@@ -89,7 +92,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    title: 'FlowWeb',
+    title: 'webautomation',
     show: !startHidden,
     icon: resourceFile(process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
@@ -241,6 +244,7 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', () => { mainWindow?.show(); mainWindow?.focus() })
   app.whenReady().then(async () => {
+    if (app.isPackaged) warnIfChromiumMissing()
     await initDb()
     const settings = getSettings()
     recoverInterruptedRuns()

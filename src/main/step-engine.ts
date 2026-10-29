@@ -123,7 +123,12 @@ export async function executeSteps(firstPage: Page, steps: ScenarioStep[], input
       case 'code': {
         // Custom code written by the scenario author; it sees page, input, output and secrets only.
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
-        await new AsyncFunction('page', 'input', 'output', 'secrets', step.code)(page, input, output, secrets)
+        const returned = await new AsyncFunction('page', 'input', 'output', 'secrets', step.code)(page, input, output, secrets)
+        if (returned !== undefined) {
+          const data = JSON.parse(JSON.stringify(returned)) as JsonValue
+          if (data && typeof data === 'object' && !Array.isArray(data)) Object.assign(output, data)
+          else output.result = data
+        }
         break
       }
       case 'pause': await sleep(Math.round(step.seconds * 1000)); break

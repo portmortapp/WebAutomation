@@ -151,6 +151,6 @@ GitHub: [github.com/RasolAlibakhshi](https://github.com/RasolAlibakhshi)
 
 <div align="center">
 
-**FlowWeb** · powered by **portmort** · ساخته‌شده با ❤️ برای کسانی که وقتشان ارزش دارد
+**WebAutomation** · powered by **portmort** · ساخته‌شده با ❤️ برای کسانی که وقتشان ارزش دارد
 
 </div>

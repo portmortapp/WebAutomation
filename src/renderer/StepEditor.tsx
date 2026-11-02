@@ -3,9 +3,9 @@ import type { Extraction, FormField, PickRequest, ScenarioStep, ValueSource } fr
 import { defaultExtraction, stepLabels } from '../shared/steps'
 import { ContextMenu } from './ContextMenu'
 
-type Props = { step: ScenarioStep; onChange: (step: ScenarioStep) => void; pick: (request: PickRequest, apply: (selector: string) => void) => void; canPick: boolean; locked: boolean; secretNames: string[] }
+type Props = { step: ScenarioStep; onChange: (step: ScenarioStep) => void; pick: (request: PickRequest, apply: (selector: string) => void) => void; canPick: boolean; locked: boolean; later?: { id: string; title: string }[]; secretNames: string[] }
 const keyNames = ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Space', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'PageDown', 'PageUp', 'Home', 'End', 'Control+A']
-const typeIcons: Partial<Record<ScenarioStep['type'], string>> = { form: '☰', code: '</>', tab: '⧉', dialog: '💬', waitPage: '⏳', history: '↻', table: '▦', field: '⌗', pause: '⏱', screenshot: '▣', press: '⌨', scroll: '⇅', select: '☰', check: '☑', hover: '⌖' }
+const typeIcons: Partial<Record<ScenarioStep['type'], string>> = { form: '☰', code: '</>', tab: '⧉', dialog: '💬', waitPage: '⏳', history: '↻', table: '▦', field: '⌗', pause: '⏱', screenshot: '▣', press: '⌨', scroll: '⇅', select: '☰', check: '☑', hover: '⌖', condition: '◇' }
 
 function SourceEditor({ value, onChange, label, secretNames }: { value: ValueSource; onChange: (value: ValueSource) => void; label: string; secretNames: string[] }) {
   return <div className="form-grid">
@@ -72,11 +72,14 @@ function FormEditor({ step, onChange, pick, canPick, secretNames }: { step: Extr
   </>
 }
 
-export function StepEditor({ step, onChange, pick, canPick, locked, secretNames }: Props) {
+export function StepEditor({ step, onChange, pick, canPick, locked, secretNames, later = [] }: Props) {
   return <fieldset disabled={locked} className="step-form">
     <div className="section-heading"><div className="step-name-heading"><span className="eyebrow">{stepLabels[step.type]}</span><input className="step-name" aria-label="عنوان مرحله" value={step.title} onChange={e => onChange({ ...step, title: e.target.value })} /></div><span className="type-icon">{typeIcons[step.type] ?? '↗'}</span></div>
     {step.type === 'navigate' && <SourceEditor label="آدرس صفحه" secretNames={secretNames} value={step.url} onChange={url => onChange({ ...step, url })} />}
-    {(step.type === 'click' || step.type === 'fill' || step.type === 'wait' || step.type === 'hover' || step.type === 'select' || step.type === 'check') && <PickRow step={step} onChange={onChange} pick={pick} canPick={canPick} />}
+    {(step.type === 'click' || step.type === 'fill' || step.type === 'wait' || step.type === 'hover' || step.type === 'select' || step.type === 'check' || step.type === 'condition') && <PickRow step={step} onChange={onChange} pick={pick} canPick={canPick} />}
+    {step.type === 'condition' && <div className="form-grid">
+      {(['yes', 'no'] as const).map(key => <label key={key}>{key === 'yes' ? 'اگر عنصر وجود داشت (بله)' : 'اگر وجود نداشت (خیر)'}<select aria-label={key === 'yes' ? 'خروجی بله' : 'خروجی خیر'} value={step[key]} onChange={e => onChange({ ...step, [key]: e.target.value })}><option value="">ادامه به نود بعدی</option>{later.map(item => <option key={item.id} value={item.id}>پرش به: {item.title}</option>)}<option value="end">پایان سناریو</option></select></label>)}
+    </div>}
     {step.type === 'fill' && <>
       <SourceEditor label="مقدار ورودی" secretNames={secretNames} value={step.value} onChange={value => onChange({ ...step, value })} />
       <label className="check"><input type="checkbox" checked={step.typing === true} onChange={e => onChange({ ...step, typing: e.target.checked })} />کاراکتر به کاراکتر تایپ شود (برای کادرهایی که با تایپ واقعی فعال می‌شوند؛ متن قبلی پاک نمی‌شود)</label>

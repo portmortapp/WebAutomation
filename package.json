@@ -15,6 +15,7 @@
     "dist:mac": "npm run build && node scripts/fetch-browser.mjs && electron-builder --mac"
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "express": "^4.21.2",
     "mssql": "^11.0.1",
     "mysql2": "^3.11.5",
@@ -86,7 +87,12 @@
             "universal"
           ]
         }
-      ]
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
     },
     "linux": {
       "icon": "resources/icon.png",
@@ -105,6 +111,14 @@
           ]
         }
       ]
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "RasolAlibakhshi",
+        "repo": "webautomation",
+        "releaseType": "release"
+      }
+    ]
   }
 }

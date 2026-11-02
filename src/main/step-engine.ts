@@ -148,6 +148,7 @@ export async function executeSteps(firstPage: Page, steps: ScenarioStep[], input
         break
       case 'screenshot': if (shotPrefix) await page.screenshot({ path: shotPrefix + step.name + '.png', fullPage: step.fullPage, timeout: 15000 }); break
       case 'wait': await page.locator(step.selector).waitFor({ state: 'visible' }); break
+      case 'condition': value = (await page.locator(step.selector).count()) > 0; break
       case 'field': value = await read(page, step.extraction); output[step.name] = value; break
       case 'table': {
         const rows = page.locator(step.rowSelector)
@@ -193,7 +194,10 @@ export async function executeSteps(firstPage: Page, steps: ScenarioStep[], input
     }
     return { value, rowCount }
   }
-  for (const step of steps) {
+  let cursor = 0
+  while (cursor < steps.length) {
+    const step = steps[cursor]
+    cursor++
     const start = Date.now()
     const maxAttempts = (step.retries ?? 0) + 1
     let attempt = 0
@@ -202,6 +206,11 @@ export async function executeSteps(firstPage: Page, steps: ScenarioStep[], input
       await publish({ id: step.id, title: step.title, status: 'running', attempts: attempt })
       try {
         const { value, rowCount } = await runOnce(step)
+        if (step.type === 'condition') {
+          const target = value ? step.yes : step.no
+          if (target === 'end') cursor = steps.length
+          else if (target) { const to = steps.findIndex(item => item.id === target); if (to >= cursor) cursor = to }
+        }
         const sample = Array.isArray(value) ? value.slice(0, 20) : value
         await publish({ id: step.id, title: step.title, status: 'passed', durationMs: Date.now() - start, output: sample, rowCount, attempts: attempt })
         break

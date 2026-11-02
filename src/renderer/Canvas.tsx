@@ -31,18 +31,19 @@ const icons: Record<StepType | 'start' | 'end', React.ReactNode> = {
   tab: <><path d="M3 9h18v11H3z" /><path d="M3 9V6.5A1.5 1.5 0 0 1 4.5 5H10l2 4" /></>,
   dialog: <><path d="M4 5h16v11H9l-5 4z" /><path d="M9 10h6" /></>,
   code: <path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14" />,
+  condition: <><path d="M12 3 21 12 12 21 3 12z" /><path d="M9.5 12h5M12 9.5v5" /></>,
   screenshot: <><path d="M4 8h3l1.6-2.5h6.8L17 8h3v11H4z" /><circle cx="12" cy="13.5" r="3.4" /></>
 }
 
 export const toneOf: Record<StepType, Tone> = {
   navigate: 'flow', wait: 'flow', pause: 'flow', scroll: 'flow', waitPage: 'flow', history: 'flow', tab: 'flow', dialog: 'flow', code: 'data', form: 'action',
-  click: 'action', fill: 'action', select: 'action', check: 'action', press: 'action', hover: 'action',
+  click: 'action', fill: 'action', select: 'action', check: 'action', press: 'action', hover: 'action', condition: 'flow',
   field: 'data', table: 'data', screenshot: 'data'
 }
 
 const groups: { title: string; hint: string; tone: Tone; types: StepType[] }[] = [
   { title: 'جریان صفحه', hint: 'رفتن، انتظار و حرکت', tone: 'flow', types: ['navigate', 'wait', 'waitPage', 'pause', 'scroll', 'history', 'tab', 'dialog'] },
-  { title: 'تعامل با صفحه', hint: 'کلیک، نوشتن و انتخاب', tone: 'action', types: ['click', 'fill', 'form', 'select', 'check', 'press', 'hover'] },
+  { title: 'تعامل با صفحه', hint: 'کلیک، نوشتن و انتخاب', tone: 'action', types: ['click', 'fill', 'form', 'select', 'check', 'press', 'hover', 'condition'] },
   { title: 'استخراج داده', hint: 'خواندن مقدار، جدول و تصویر', tone: 'data', types: ['field', 'table', 'screenshot', 'code'] }
 ]
 
@@ -61,6 +62,7 @@ function detail(step: ScenarioStep): string {
     case 'check': return (step.checked ? 'تیک ✓ ' : 'بدون تیک ') + step.selector
     case 'scroll': return step.to === 'element' ? step.selector : step.to === 'top' ? 'بالای صفحه' : 'پایین صفحه'
     case 'pause': return step.seconds + ' ثانیه'
+    case 'condition': return 'اگر وجود دارد: ' + step.selector
     case 'screenshot': return 'shot-' + step.name + '.png'
     case 'form': return step.fields.length + ' فیلد · ' + step.fields.map(f => f.selector).slice(0, 2).join('، ')
     case 'waitPage': return step.mode === 'url' ? 'آدرس: ' + step.url : step.mode === 'networkidle' ? 'پایان درخواست‌های شبکه' : step.mode === 'domcontentloaded' ? 'پایان بارگذاری HTML' : 'پایان بارگذاری صفحه'
@@ -242,14 +244,28 @@ export function Canvas({ steps, selectedId, results, locked, running, outputName
         </defs>
         {items.slice(0, -1).map((item, i) => {
           const next = items[i + 1]
-          const r = route(position(item.index, cols), position(next.index, cols))
           const from = item.step ? resultOf(item.step.id) : undefined
           const to = next.step ? resultOf(next.step.id) : undefined
           const state = to?.status === 'running' ? 'flowing' : (item.kind === 'start' || from?.status === 'passed') && to?.status === 'passed' ? 'done' : ''
+          if (item.step?.type === 'condition') {
+            const cond = item.step
+            const a = position(item.index, cols)
+            return (['yes', 'no'] as const).map(key => {
+              const target = cond[key]
+              const dest = target === 'end' ? items[items.length - 1] : target ? items.find(entry => entry.key === target) ?? next : next
+              const b = position(dest.index, cols)
+              const x1 = a.x + (key === 'yes' ? W * 0.3 : W * 0.7), y1 = a.y + H, x2 = b.x + W / 2, y2 = b.y
+              const side = key === 'yes' ? -1 : 1
+              const d = dest === next && b.x === a.x ? `M${x1} ${y1} C${x1} ${y1 + 30} ${x2} ${y2 - 30} ${x2} ${y2}` : `M${x1} ${y1} C${x1} ${y1 + 70} ${x2 + side * 60} ${y2 - 70} ${x2} ${y2}`
+              return <g key={item.key + key}><path d={d} className={'edge branch-' + key + ' ' + state} markerEnd="url(#arrow)" /><text className={'branch-label ' + key} x={x1} y={y1 + 16} textAnchor="middle">{key === 'yes' ? 'بله' : 'خیر'}</text></g>
+            })
+          }
+          const r = route(position(item.index, cols), position(next.index, cols))
           return <path key={item.key + next.key} d={r.d} className={'edge ' + state} markerEnd="url(#arrow)" />
         })}
       </svg>
-      {items.slice(0, -1).map((item, i) => {
+      {items.slice(0, -1).filter(item => item.step?.type !== 'condition').map((item) => {
+        const i = item.index
         const next = items[i + 1]
         const r = route(position(item.index, cols), position(next.index, cols))
         return <button key={'add' + item.key} className="add-between" style={{ left: r.mid.x, top: r.mid.y }} disabled={locked || steps.length >= 100} aria-label={'افزودن نود در جایگاه ' + (i + 1)} onClick={event => openPicker(i, event)}>＋</button>
@@ -270,7 +286,7 @@ export function Canvas({ steps, selectedId, results, locked, running, outputName
         return <div key={step.id} data-step-id={step.id} className={['flow-node', tone, selectedId === step.id ? 'selected' : '', result?.status ?? '', dragId === step.id ? 'dragging' : '', overId === step.id && dragId !== step.id ? 'drop' : '', running && !result ? 'idle' : ''].join(' ')} style={{ left: pos.x, top: pos.y, width: W, height: H }}
           draggable={!locked} onDragStart={event => { setDragId(step.id); event.dataTransfer.effectAllowed = 'move' }} onDragOver={event => { if (dragId) { event.preventDefault(); setOverId(step.id) } }} onDrop={event => { event.preventDefault(); const from = dragId; setDragId(''); setOverId(''); if (from) onDrop(from, step.id) }} onDragEnd={() => { setDragId(''); setOverId('') }}
           role="button" tabIndex={0} aria-label={step.title} aria-pressed={selectedId === step.id} onClick={() => onSelect(step.id)} onKeyDown={event => { if (event.key === 'Enter') onSelect(step.id); if ((event.key === 'Delete' || event.key === 'Backspace') && !locked) onDelete(step.id) }}>
-          <i className="port in" /><i className="port out" />
+          <i className="port in" />{step.type === 'condition' ? <><i className="port yes" /><i className="port no" /></> : <i className="port out" />}
           <span className="node-num">{item.index}</span>
           <span className="node-icon"><NodeIcon type={step.type} /></span>
           <span className="node-text" dir="auto"><strong>{step.title}</strong><small><b>{stepLabels[step.type]}</b>{' · '}<span dir="auto">{detail(step)}</span></small></span>

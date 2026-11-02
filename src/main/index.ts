@@ -25,6 +25,7 @@ import {
   secretNamesInSteps
 } from './store'
 import { ScenarioRunner } from './runner'
+import { initAutoUpdate } from './updater'
 import {
   apiCall,
   friendlyApiError,
@@ -38,6 +39,8 @@ import { recordCodegen, stopCodegen } from './codegen'
 import { validateSettings } from '../shared/validation'
 import { initDb, closeDb, publicConfig, getDbStatus, testDb, saveDb } from './db-sync'
 import { Inspector } from './inspector'
+import { startScheduler, stopScheduler, listSchedules, saveSchedule, deleteSchedule, deleteSchedulesFor, runScheduleNow, handleRunFinished, retargetScheduledRun } from './scheduler'
+import type { SaveScheduleInput } from '../shared/schedule'
 import type { AppSettings, SaveScenarioInput, RunRequest, ScenarioStep, JsonValue, PickRequest } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
@@ -144,7 +147,11 @@ function registerIpc() {
     return saveScenario(input)
   })
 
-  handle('scenarios:delete', (_event, id: string) => deleteScenario(id))
+  handle('scenarios:delete', (_event, id: string) => { const ok = deleteScenario(id); if (ok) deleteSchedulesFor(id); return ok })
+  handle('schedules:list', () => listSchedules())
+  handle('schedules:save', (_event, input: SaveScheduleInput) => saveSchedule(input))
+  handle('schedules:delete', (_event, id: string) => deleteSchedule(id))
+  handle('schedules:runNow', (_event, id: string) => runScheduleNow(id))
   handle('runs:cancel', (_event, id: string) => runner.cancel(id))
 
   handle('scenarios:enqueue', (_event, id: string, request?: RunRequest) => {
@@ -184,13 +191,19 @@ function registerIpc() {
     runner.onFinished = run => {
       const info = attempts.get(run.id) ?? { root: run.id, n: 0 }
       attempts.delete(run.id)
+      const scheduled = handleRunFinished(run)
+      if (scheduled && run.status === 'passed' && getSettings().notifyOnFailure !== false && Notification.isSupported()) {
+        const n = new Notification({ title: `اجرای زمان‌بندی‌شدهٔ «${run.title}» موفق بود` })
+        n.on('click', showWindow)
+        n.show()
+      }
       if (run.status === 'passed' || run.status === 'cancelled') return
       const current = getSettings()
       const scenario = getScenario(run.scenarioId)
       const retryable = run.status === 'failed' && scenario && info.n < (current.retryCount ?? 0)
       if (retryable) {
         setTimeout(() => {
-          try { const next = runner.enqueue(scenario, { input: run.input }); attempts.set(next.id, { root: info.root, n: info.n + 1 }) }
+          try { const next = runner.enqueue(scenario, { input: run.input }); attempts.set(next.id, { root: info.root, n: info.n + 1 }); if (scheduled) retargetScheduledRun(run.id, next.id) }
           catch (error) { console.error('Retry failed:', error) }
         }, 5000).unref()
         return
@@ -254,10 +267,12 @@ if (!app.requestSingleInstanceLock()) {
     pruneTimer = setInterval(() => runner.prune(), 6 * 3600 * 1000)
     pruneTimer.unref()
     registerIpc()
+    startScheduler({ getScenario, enqueue: (scenario, request) => runner.enqueue(scenario, request) })
     try { await startApiServer(runner) }
     catch (error) { console.error('Could not start API server:', error) }
     createTray()
     createWindow()
+    initAutoUpdate()
     app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow() })
   }).catch(error => { console.error('Startup failed:', error); app.quit() })
 }
@@ -271,6 +286,7 @@ app.on('before-quit', event => {
   if (shuttingDown) return
   shuttingDown = true
   if (pruneTimer) clearInterval(pruneTimer)
+  stopScheduler()
   void closeDb().catch(() => undefined)
   void Promise.all([stopApiServer(), runner?.shutdown(), stopCodegen(), inspector.close()]).then(() => {
     shutdownComplete = true

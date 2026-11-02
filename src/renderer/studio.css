@@ -364,3 +364,22 @@ label.switch input{width:auto}
 
 .donate-card{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:14px;background:linear-gradient(135deg,#e6f6f3,#f0faf8);border:1px solid #bfe5df;border-radius:12px;padding:18px 30px;text-align:center}
 .donate-card span{font-size:14px;font-weight:700;color:#087f74}.donate-card p{margin:0;font-size:12px;color:#4a5a6a}.donate-card code{font-size:11px;color:#087f74}
+
+.port.yes,.port.no{top:auto;bottom:-6px;right:auto;margin-top:0}
+.port.yes{left:30%;border-color:#2fe0b8}.port.no{left:70%;border-color:#ff6d5a}
+.edge.branch-yes{stroke:#2fe0b8}.edge.branch-no{stroke:#ff6d5a}
+.branch-label{font-size:12px;font-weight:700;fill:#9fb0cf}.branch-label.yes{fill:#2fe0b8}.branch-label.no{fill:#ff6d5a}
+
+/* schedules */
+.schedule-page{display:flex;flex-direction:column;gap:14px}
+.schedule-form{display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.schedule-form label{display:flex;flex-direction:column;gap:6px;max-width:100%}
+.weekdays{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border-radius:999px;padding:6px 12px}
+.chip.active{background:var(--accent,#6d5efc);color:#fff}
+.schedule-list{display:flex;flex-direction:column;gap:12px}
+.schedule-item{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+.schedule-item.off{opacity:.6}
+.schedule-info{display:flex;flex-direction:column;gap:4px;min-width:0}
+.schedule-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+@media (max-width:640px){.schedule-item{flex-direction:column;align-items:stretch}}

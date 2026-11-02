@@ -48,6 +48,7 @@ export type ScenarioStep = { id: string; title: string; retries?: number; retryD
   | { type: 'history'; action: 'reload' | 'back' | 'forward' }
   | { type: 'code'; code: string }
   | { type: 'pause'; seconds: number }
+  | { type: 'condition'; selector: string; yes: string; no: string }
   | { type: 'hover'; selector: string }
   | { type: 'select'; selector: string; value: ValueSource; by: 'value' | 'label' }
   | { type: 'check'; selector: string; checked: boolean }
@@ -161,6 +162,10 @@ export interface ElectronAPI {
   listProfiles(): Promise<ProfileInfo[]>
   deleteProfile(id: string): Promise<boolean>
   captureProfile(name: string, existingId?: string): Promise<ProfileInfo>
+  listSchedules(): Promise<import('./schedule').Schedule[]>
+  saveSchedule(input: import('./schedule').SaveScheduleInput): Promise<import('./schedule').Schedule>
+  deleteSchedule(id: string): Promise<boolean>
+  runSchedule(id: string): Promise<{ ok: boolean; error?: string }>
   listSecrets(): Promise<SecretInfo[]>
   saveSecret(name: string, value: string): Promise<SecretInfo[]>
   deleteSecret(name: string): Promise<SecretInfo[]>

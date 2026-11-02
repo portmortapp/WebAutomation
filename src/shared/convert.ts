@@ -658,6 +658,7 @@ function stepLines(step: ScenarioStep, index: number, P: string): string[] {
       const opt = step.button && step.button !== 'left' ? '{ button: ' + str(step.button) + ' }' : ''
       body.push('await ' + loc + (step.double ? '.dblclick(' : '.click(') + opt + ')'); break
     }
+    case 'condition': body.push('// شرط وجود عنصر فقط در حالت نودها اجرا می‌شود؛ تبدیل به کد پشتیبانی نمی‌شود: ' + step.selector); break
     case 'hover': body.push('await ' + loc + '.hover()'); break
     case 'wait': body.push('await ' + loc + ".waitFor({ state: 'visible' })"); break
     case 'check': body.push('await ' + loc + '.setChecked(' + step.checked + ')'); break

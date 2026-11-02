@@ -2,7 +2,7 @@ import type { Extraction, ScenarioStep, ValueSource } from './types'
 import { ValidationError } from './validation'
 
 export const stepLabels: Record<ScenarioStep['type'], string> = {
-  navigate: 'بازکردن صفحه', fill: 'واردکردن مقدار', click: 'کلیک', wait: 'انتظار برای عنصر', pause: 'ماندن در صفحه', hover: 'قراردادن ماوس روی عنصر', select: 'انتخاب از لیست', check: 'تیک زدن / برداشتن تیک', press: 'فشردن کلید', scroll: 'اسکرول', screenshot: 'اسکرین‌شات', form: 'پر کردن فرم (چند فیلد)', tab: 'تعویض یا بستن تب', dialog: 'پاسخ به پیام (دیالوگ)', waitPage: 'انتظار برای صفحه', history: 'بارگذاری مجدد / برگشت', code: 'کد سفارشی', field: 'خواندن مقدار', table: 'استخراج جدول'
+  navigate: 'بازکردن صفحه', fill: 'واردکردن مقدار', click: 'کلیک', wait: 'انتظار برای عنصر', pause: 'ماندن در صفحه', hover: 'قراردادن ماوس روی عنصر', select: 'انتخاب از لیست', check: 'تیک زدن / برداشتن تیک', press: 'فشردن کلید', scroll: 'اسکرول', screenshot: 'اسکرین‌شات', form: 'پر کردن فرم (چند فیلد)', tab: 'تعویض یا بستن تب', dialog: 'پاسخ به پیام (دیالوگ)', waitPage: 'انتظار برای صفحه', history: 'بارگذاری مجدد / برگشت', code: 'کد سفارشی', field: 'خواندن مقدار', table: 'استخراج جدول', condition: 'شرط: وجود عنصر'
 }
 export const defaultExtraction = (): Extraction => ({ selector: '', read: 'text', attribute: 'href', dataType: 'text', normalizeDigits: true, removeSeparators: true, missing: 'error' })
 export function createStep(type: ScenarioStep['type']): ScenarioStep {
@@ -12,6 +12,7 @@ export function createStep(type: ScenarioStep['type']): ScenarioStep {
     case 'fill': return { ...base, type, selector: '', value: { kind: 'input', value: 'orderId' } }
     case 'pause': return { ...base, type, seconds: 5 }
     case 'hover': return { ...base, type, selector: '' }
+    case 'condition': return { ...base, type, selector: '', yes: '', no: '' }
     case 'select': return { ...base, type, selector: '', value: { kind: 'literal', value: '' }, by: 'value' }
     case 'check': return { ...base, type, selector: '', checked: true }
     case 'press': return { ...base, type, selector: '', key: 'Enter' }
@@ -118,6 +119,17 @@ export function validateSteps(value: unknown): asserts value is ScenarioStep[] {
       case 'pause':
         if (typeof step.seconds !== 'number' || !Number.isFinite(step.seconds) || step.seconds < 0.1 || step.seconds > 3600) throw new ValidationError('مدت ماندن در صفحه باید بین ۰٫۱ تا ۳۶۰۰ ثانیه باشد.')
         break
+      case 'condition': {
+        text(step.selector, 'انتخابگر')
+        const at = (value as ScenarioStep[]).indexOf(step)
+        for (const target of [step.yes, step.no]) {
+          if (typeof target !== 'string') throw new ValidationError('مقصد شرط نامعتبر است.')
+          if (target === '' || target === 'end') continue
+          const to = (value as ScenarioStep[]).findIndex(item => item.id === target)
+          if (to <= at) throw new ValidationError('مقصد شرط باید یکی از نودهای بعدی باشد.')
+        }
+        break
+      }
       case 'field': name(step.name); extraction(step.extraction); break
       case 'table': {
         name(step.name); text(step.rowSelector, 'انتخابگر ردیف‌ها')

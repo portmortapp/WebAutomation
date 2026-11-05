@@ -5,7 +5,7 @@ import crypto from 'node:crypto'
 import { validateSettings, ValidationError } from '../shared/validation'
 import { secretNamePattern, validateSteps } from '../shared/steps'
 import { isTerminalStatus } from '../shared/types'
-import { mirror, mirrorDelete } from './db-sync'
+import { mirror, mirrorDelete, mirrorSecret, setProfileCodec } from './db-sync'
 import { compileSteps } from './step-engine'
 import type {
   AppSettings,
@@ -271,6 +271,7 @@ function writePrivate(filePath: string, value: unknown) {
   const encrypted = safeStorage?.isEncryptionAvailable?.() === true
   const data = encrypted ? safeStorage.encryptString(plain).toString('base64') : plain
   atomicWriteJson(filePath, { v: 1, enc: encrypted, data })
+  try { mirrorSecret(filePath, plain) } catch (error) { console.error('DB profile mirror failed:', error) }
 }
 
 function readPrivate<T>(filePath: string, fallback: T): T {
@@ -284,6 +285,19 @@ function readPrivate<T>(filePath: string, fallback: T): T {
     return fallback
   }
 }
+
+setProfileCodec({
+  toLocal(plain) {
+    const encrypted = safeStorage?.isEncryptionAvailable?.() === true
+    return JSON.stringify({ v: 1, enc: encrypted, data: encrypted ? safeStorage.encryptString(plain).toString('base64') : plain }, null, 2)
+  },
+  fromLocal(file) {
+    if (!fs.existsSync(file)) return null
+    const w = JSON.parse(fs.readFileSync(file, 'utf8')) as { enc: boolean; data: string }
+    return w.enc ? safeStorage.decryptString(Buffer.from(w.data, 'base64')) : w.data
+  },
+  list() { return fs.existsSync(PROFILES_DIR) ? fs.readdirSync(PROFILES_DIR).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).filter(id => profilePattern.test(id)) : [] }
+})
 
 // ---------- session profiles ----------
 export function listProfiles(): ProfileInfo[] {
@@ -319,6 +333,7 @@ export function deleteProfile(id: string): boolean {
   if (!items.some(item => item.id === id)) return false
   atomicWriteJson(PROFILES_INDEX, { version: 1, items: items.filter(item => item.id !== id) })
   fs.rmSync(path.join(PROFILES_DIR, id + '.json'), { force: true })
+  mirrorDelete(path.join(PROFILES_DIR, id + '.json'))
   // Scenarios that used this profile run without a session instead of failing.
   const scenarios = getScenarios()
   if (scenarios.some(item => item.profileId === id)) {
@@ -379,6 +394,19 @@ export function listArtifacts(runId: string): string[] {
   try { return fs.readdirSync(path.join(RUNS_DIR, runId)).filter(name => artifactPattern.test(name)).sort() } catch { return [] }
 }
 
+export function artifactPath(runId: string, name: string): string | undefined {
+  if (!/^run_[a-f0-9-]+$/i.test(runId) || !artifactPattern.test(name)) return undefined
+  const file = path.join(RUNS_DIR, runId, name)
+  return fs.existsSync(file) ? file : undefined
+}
+
+export function deleteArtifact(runId: string, name: string): boolean {
+  const file = artifactPath(runId, name)
+  if (!file) return false
+  fs.rmSync(file, { force: true })
+  return true
+}
+
 export function readArtifact(runId: string, name: string): Buffer | undefined {
   if (!/^run_[a-f0-9-]+$/i.test(runId) || !artifactPattern.test(name)) return undefined
   const file = path.join(RUNS_DIR, runId, name)
@@ -404,4 +432,30 @@ export function listRuns(scenarioId?: string, limit = 30): RunSummary[] {
     if (result.length >= max) break
   }
   return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+// Full history for reports (no 200 cap). Reads each result.json; fine for thousands of runs.
+// Cache keyed by file mtime+size: unchanged result.json files are not re-read or re-parsed.
+const summaryCache = new Map<string, { sig: string; summary: RunSummary }>()
+
+export function listAllRuns(): RunSummary[] {
+  ensureDirectories()
+  const out: RunSummary[] = []
+  const seen = new Set<string>()
+  for (const id of fs.readdirSync(RUNS_DIR)) {
+    if (!/^run_[a-f0-9-]+$/i.test(id)) continue
+    let sig: string
+    try { const st = fs.statSync(path.join(RUNS_DIR, id, 'result.json')); sig = st.mtimeMs + ':' + st.size } catch { continue }
+    seen.add(id)
+    const hit = summaryCache.get(id)
+    if (hit && hit.sig === sig) { out.push(hit.summary); continue }
+    let run: RunRecord | undefined
+    try { run = readRun(id) } catch { continue }
+    if (!run) continue
+    const summary: RunSummary = { id: run.id, scenarioId: run.scenarioId, title: run.title, status: run.status, createdAt: run.createdAt, startedAt: run.startedAt, endedAt: run.endedAt, durationMs: run.durationMs, error: run.error && { code: run.error.code, message: run.error.message }, failedStep: run.failedStep }
+    summaryCache.set(id, { sig, summary })
+    out.push(summary)
+  }
+  for (const id of summaryCache.keys()) if (!seen.has(id)) summaryCache.delete(id)
+  return out
 }

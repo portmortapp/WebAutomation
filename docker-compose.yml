@@ -3,6 +3,7 @@
 #
 #   docker compose up -d                          -> n8n only
 #   docker compose --profile postgres up -d       -> n8n + PostgreSQL
+#   docker compose --profile postgres --profile pgadmin up -d -> n8n + PostgreSQL + pgAdmin
 #   docker compose --profile mysql up -d          -> n8n + MySQL
 #   docker compose --profile mssql up -d          -> n8n + SQL Server
 #
@@ -53,39 +54,55 @@ services:
       timeout: 5s
       retries: 5
 
-  mysql:
-    profiles: ["mysql"]
-    image: mysql:8.4
+  pgadmin:
+    profiles: ["postgres", "pgadmin"]
+    image: dpage/pgadmin4:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
     environment:
-      MYSQL_DATABASE: ${DB_NAME:-flowweb}
-      MYSQL_USER: ${DB_USER:-flowweb}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?set PGADMIN_PASSWORD in .env}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
     volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
 
-  mssql:
-    profiles: ["mssql"]
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:${MSSQL_PORT:-1433}:1433"
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-    volumes:
-      - mssql_data:/var/opt/mssql
+  # mysql:
+  #   profiles: ["mysql"]
+  #   image: mysql:8.4
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+  #   environment:
+  #     MYSQL_DATABASE: ${DB_NAME:-flowweb}
+  #     MYSQL_USER: ${DB_USER:-flowweb}
+  #     MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+  #     MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+
+  # mssql:
+  #   profiles: ["mssql"]
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:${MSSQL_PORT:-1433}:1433"
+  #   environment:
+  #     ACCEPT_EULA: "Y"
+  #     MSSQL_SA_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+  #   volumes:
+  #     - mssql_data:/var/opt/mssql
 
 volumes:
   n8n_data:
   postgres_data:
-  mysql_data:
-  mssql_data:
+  pgadmin_data:
+  # mysql_data:
+  # mssql_data:

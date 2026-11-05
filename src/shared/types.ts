@@ -159,9 +159,14 @@ export interface ElectronAPI {
   onPreviewProgress(callback: (result: StepResult) => void): () => void
   listRuns(scenarioId?: string, limit?: number): Promise<RunSummary[]>
   getArtifact(runId: string, name: string): Promise<string | null>
+  openArtifact(runId: string, name: string): Promise<boolean>
+  saveArtifact(runId: string, name: string): Promise<boolean>
+  deleteArtifact(runId: string, name: string): Promise<boolean>
   listProfiles(): Promise<ProfileInfo[]>
   deleteProfile(id: string): Promise<boolean>
   captureProfile(name: string, existingId?: string): Promise<ProfileInfo>
+  queryRuns(query: import('./run-report').RunQuery): Promise<import('./run-report').RunPage>
+  runStats(days: number, scenarioId?: string): Promise<{ stats: import('./run-report').ScenarioStats[]; source: 'database' | 'local' }>
   listSchedules(): Promise<import('./schedule').Schedule[]>
   saveSchedule(input: import('./schedule').SaveScheduleInput): Promise<import('./schedule').Schedule>
   deleteSchedule(id: string): Promise<boolean>

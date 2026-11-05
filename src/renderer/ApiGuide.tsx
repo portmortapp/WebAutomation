@@ -71,7 +71,7 @@ export function ApiGuide({ port, token, scenarioId }: { port: number; token: str
           ['GET', '/api/health', 'بررسی زنده بودن سرویس (بدون توکن)'],
           ['GET', '/api/scenarios', 'لیست سناریوها'],
           ['GET', '/api/scenarios/:id', 'جزئیات یک سناریو'],
-          ['POST', '/api/scenarios/:id/run', 'شروع اجرا (202) — بدنه: input, timeoutMs'],
+          ['POST', '/api/scenarios/:id/run', 'اجرا و انتظار تا پایان (200 موفق / 422 ناموفق). با ?wait=false فوری 202؛ ?waitTimeout=ثانیه (پیش‌فرض ۳۰۰) — بدنه: input, timeoutMs'],
           ['GET', '/api/runs?scenarioId=&limit=', 'تاریخچهٔ اجراها (limit تا ۲۰۰)'],
           ['GET', '/api/runs/:runId', 'وضعیت، خروجی و نتیجهٔ مرحله‌ها'],
           ['POST', '/api/runs/:runId/cancel', 'لغو اجرا'],

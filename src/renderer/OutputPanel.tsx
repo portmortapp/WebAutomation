@@ -6,6 +6,8 @@ const statusText: Record<string, string> = { queued: 'در صف', running: 'در
 function Shots({ run }: { run: RunRecord | null }) {
   const [images, setImages] = useState<{ name: string; src: string }[]>([])
   const [loading, setLoading] = useState(false)
+  const [note, setNote] = useState('')
+  const [confirming, setConfirming] = useState('')
   const key = run ? run.id + ':' + (run.artifacts ?? []).join(',') : ''
   useEffect(() => {
     let live = true
@@ -17,11 +19,24 @@ function Shots({ run }: { run: RunRecord | null }) {
     }).catch(() => undefined).finally(() => { if (live) setLoading(false) })
     return () => { live = false }
   }, [key])
+  const act = async (name: string, kind: 'open' | 'save' | 'delete') => {
+    if (!run) return
+    try {
+      if (kind === 'delete') {
+        if (confirming !== name) { setConfirming(name); return }
+        setConfirming('')
+        if (await window.electronAPI.deleteArtifact(run.id, name)) { setImages(list => list.filter(item => item.name !== name)); setNote('تصویر حذف شد.') } else setNote('حذف انجام نشد؛ فایل پیدا نشد.')
+      } else {
+        const ok = kind === 'open' ? await window.electronAPI.openArtifact(run.id, name) : await window.electronAPI.saveArtifact(run.id, name)
+        setNote(ok ? (kind === 'save' ? 'تصویر ذخیره شد.' : '') : kind === 'save' ? '' : 'باز کردن تصویر ممکن نشد.')
+      }
+    } catch { setNote('عملیات انجام نشد.') }
+  }
   if (!run?.artifacts?.length) return <div className="output-empty"><span>▣</span><div><strong>تصویری برای این اجرا ثبت نشده است.</strong><p>با خطا، تصویر صفحه به‌صورت خودکار ذخیره می‌شود؛ مرحله «اسکرین‌شات» هم تصویر مشخصی می‌گیرد.</p></div></div>
-  return <div className="shots">{loading && <p className="muted">در حال بارگذاری تصاویر…</p>}{images.map(image => <figure key={image.name}><img src={image.src} alt={image.name} /><figcaption dir="ltr">{image.name === 'failure.png' ? 'failure.png — صفحه هنگام خطا' : image.name}</figcaption></figure>)}</div>
+  return <div className="shots">{loading && <p className="muted">در حال بارگذاری تصاویر…</p>}{note && <p className="muted" role="status">{note}</p>}{!loading && !images.length && <p className="muted">تصویری باقی نمانده است.</p>}{images.map(image => <figure key={image.name}><img src={image.src} alt={image.name} onClick={() => void act(image.name, 'open')} style={{ cursor: 'zoom-in' }} /><div className="shot-actions" style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', margin: '6px 0' }}><button className="text-button" onClick={() => void act(image.name, 'open')}>باز کردن</button><button className="text-button" onClick={() => void act(image.name, 'save')}>دانلود</button><button className={'text-button' + (confirming === image.name ? ' danger' : '')} onBlur={() => setConfirming('')} onClick={() => void act(image.name, 'delete')}>{confirming === image.name ? 'تأیید حذف؟' : 'حذف'}</button></div><figcaption dir="ltr">{image.name === 'failure.png' ? 'failure.png — صفحه هنگام خطا' : image.name}</figcaption></figure>)}</div>
 }
 
-export function OutputPanel({ run, preview, previewError, expanded, onExpand, history, onOpenRun }: { run: RunRecord | null; preview: StepPreview | null; previewError: string; expanded: boolean; onExpand: () => void; history: RunSummary[]; onOpenRun: (id: string) => void }) {
+export const OutputPanel = React.memo(function OutputPanel({ run, preview, previewError, expanded, onExpand, history, onOpenRun }: { run: RunRecord | null; preview: StepPreview | null; previewError: string; expanded: boolean; onExpand: () => void; history: RunSummary[]; onOpenRun: (id: string) => void }) {
   const [tab, setTab] = useState<'data' | 'json' | 'logs' | 'shots' | 'history'>('data')
   const output = preview ? preview.output : run?.output
   const object = output && typeof output === 'object' && !Array.isArray(output) ? output : null
@@ -51,4 +66,4 @@ export function OutputPanel({ run, preview, previewError, expanded, onExpand, hi
       </>}
     </div>
   </section>
-}
+})

@@ -115,7 +115,7 @@ type Props = {
   onFocusInput: () => void
 }
 
-export function Canvas({ steps, selectedId, results, locked, running, outputNames, canTest, onSelect, onInsert, onDelete, onDuplicate, onDrop, onTest, suggestAfter, onStart, onMove, onFocusInput }: Props) {
+export const Canvas = React.memo(function Canvas({ steps, selectedId, results, locked, running, outputNames, canTest, onSelect, onInsert, onDelete, onDuplicate, onDrop, onTest, suggestAfter, onStart, onMove, onFocusInput }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const [view, setView] = useState({ x: 40, y: 60, k: 1 })
   const [picker, setPicker] = useState<{ index: number; x: number; y: number } | null>(null)
@@ -314,4 +314,4 @@ export function Canvas({ steps, selectedId, results, locked, running, outputName
       <button className="picker-close" onClick={() => setPicker(null)}>بستن</button>
     </div>}
   </section>
-}
+})

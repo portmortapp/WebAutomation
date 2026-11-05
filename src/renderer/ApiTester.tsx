@@ -25,7 +25,7 @@ export function ApiTester({ scenarios, scenarioId, defaultInput = '{}' }: Props)
       let body: JsonValue = {}
       try { body = { input: JSON.parse(input || '{}') as JsonValue } } catch { log('bad', 'ورودی JSON معتبر نیست.'); return }
       log('info', 'POST /api/scenarios/' + id + '/run')
-      const started = await window.electronAPI.apiCall({ method: 'POST', path: '/api/scenarios/' + encodeURIComponent(id) + '/run', body })
+      const started = await window.electronAPI.apiCall({ method: 'POST', path: '/api/scenarios/' + encodeURIComponent(id) + '/run?wait=false', body })
       const run = (started.body as { run?: RunRecord } | null)?.run
       if (started.status !== 202 || !run) {
         const message = (started.body as { error?: { message?: string } } | null)?.error?.message

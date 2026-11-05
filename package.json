@@ -1,7 +1,7 @@
 {
   "name": "flowweb",
   "productName": "webautomation",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {
@@ -22,7 +22,8 @@
     "pg": "^8.13.1",
     "playwright": "^1.50.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "recharts": "^2.15.0"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",

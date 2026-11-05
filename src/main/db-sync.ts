@@ -2,13 +2,48 @@ import { app, safeStorage } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import type { DbConfig, DbStatus, DbType } from '../shared/types'
+import type { DbConfig, DbStatus, DbType, RunSummary } from '../shared/types'
+import type { LightRun, RunPage, RunQuery } from '../shared/run-report'
+import { MAX_PAGE_SIZE } from '../shared/run-report'
 
 // Optional SQL mirror. Local JSON files stay the working copy (the store is synchronous);
 // every write to a mirrored file is queued to the database. If the DB is down, files keep working.
 const DATA_DIR = path.join(app.getPath('userData'), 'flowweb')
 const CONFIG_FILE = path.join(DATA_DIR, 'db.json')
-const MIRRORED = [/^scenarios\.json$/, /^runs\/[^/]+\/result\.json$/]
+const MIRRORED = [/^scenarios\.json$/, /^profiles\.json$/, /^runs\/[^/]+\/result\.json$/]
+const PROFILE_KEY = /^profiles\/prf_[a-f0-9-]{36}\.json$/
+
+// Session profiles are encrypted locally with the OS keychain, which cannot be opened on another machine.
+// For the database they are re-encrypted (AES-256-GCM) with a key derived from the DB credentials, so any
+// machine connected to the same database can restore them. The store registers the local codec.
+interface ProfileCodec { toLocal(plain: string): string; fromLocal(file: string): string | null; list(): string[] }
+let codec: ProfileCodec | null = null
+export function setProfileCodec(c: ProfileCodec) { codec = c }
+let secretSrc = ''
+const secretOf = (c: DbConfig) => [c.password, c.user, c.database].join('|')
+function sealPortable(plain: string): string {
+  const salt = crypto.randomBytes(16), iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', crypto.scryptSync(secretSrc, salt, 32), iv)
+  const data = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()])
+  return JSON.stringify({ v: 2, alg: 'aes-256-gcm', salt: salt.toString('base64'), iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') })
+}
+function openPortable(body: string): string {
+  const e = JSON.parse(body) as { salt: string; iv: string; tag: string; data: string }
+  const d = crypto.createDecipheriv('aes-256-gcm', crypto.scryptSync(secretSrc, Buffer.from(e.salt, 'base64'), 32), Buffer.from(e.iv, 'base64'))
+  d.setAuthTag(Buffer.from(e.tag, 'base64'))
+  return Buffer.concat([d.update(Buffer.from(e.data, 'base64')), d.final()]).toString('utf8')
+}
+
+// Called by the store after a profile is saved; `plain` is the decrypted session state.
+export function mirrorSecret(file: string, plain: string) {
+  if (!adapter) return
+  const key = relKey(file)
+  if (!PROFILE_KEY.test(key)) return
+  const tomb = loadTomb()
+  if (tomb.delete(key)) saveTomb(tomb)
+  queue.set(key, sealPortable(plain))
+  void flush()
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface Adapter { query(sql: string, params?: unknown[]): Promise<any[]>; close(): Promise<void> }
@@ -130,7 +165,11 @@ function migrations(type: DbType): { version: number; name: string; sql: string[
   const ts = type === 'mssql' ? 'DATETIME2' : type === 'mysql' ? 'DATETIME' : 'TIMESTAMP'
   return [
     { version: 1, name: 'documents', sql: [`CREATE TABLE flowweb_documents (doc_key ${key} NOT NULL PRIMARY KEY, body ${text} NOT NULL, updated_at ${ts} NOT NULL)`] },
-    { version: 2, name: 'documents_updated_index', sql: ['CREATE INDEX ix_flowweb_documents_updated ON flowweb_documents (updated_at)'] }
+    { version: 2, name: 'documents_updated_index', sql: ['CREATE INDEX ix_flowweb_documents_updated ON flowweb_documents (updated_at)'] },
+    { version: 3, name: 'runs', sql: [
+      `CREATE TABLE flowweb_runs (run_id ${key} NOT NULL PRIMARY KEY, scenario_id ${key} NOT NULL, title ${key}, status VARCHAR(30) NOT NULL, created_at ${ts} NOT NULL, started_at ${ts}, ended_at ${ts}, duration_ms BIGINT, error_code VARCHAR(40), error_message ${text}, failed_step ${key})`,
+      'CREATE INDEX ix_flowweb_runs_scenario ON flowweb_runs (scenario_id, created_at)'
+    ] }
   ]
 }
 
@@ -158,8 +197,91 @@ async function upsert(db: Adapter, type: DbType, key: string, body: string) {
   await db.query('INSERT INTO flowweb_documents (doc_key, body, updated_at) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM flowweb_documents WHERE doc_key = ?)', [key, body, now, key])
 }
 
+
+// ---- Run history table (queryable copy of runs/*/result.json) ----
+const toDate = (v?: string) => { const t = v ? new Date(v) : null; return t && !Number.isNaN(t.getTime()) ? t : null }
+const clip = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : null)
+
+async function upsertRun(db: Adapter, type: DbType, body: string) {
+  let r: any
+  try { r = JSON.parse(body) } catch { return }
+  if (!r?.id || !r.scenarioId || !r.createdAt) return
+  const id = String(r.id).slice(0, 400)
+  const cols = [clip(r.scenarioId, 400), clip(r.title, 400), clip(r.status, 30), toDate(r.createdAt), toDate(r.startedAt), toDate(r.endedAt), typeof r.durationMs === 'number' ? Math.round(r.durationMs) : null, clip(r.error?.code, 40), typeof r.error?.message === 'string' ? r.error.message : null, clip(r.failedStep?.title, 400)]
+  const names = ['scenario_id', 'title', 'status', 'created_at', 'started_at', 'ended_at', 'duration_ms', 'error_code', 'error_message', 'failed_step']
+  if (type === 'postgres') return db.query(`INSERT INTO flowweb_runs (run_id, ${names.join(', ')}) VALUES (${'?, '.repeat(10)}?) ON CONFLICT (run_id) DO UPDATE SET ${names.map(n => `${n} = EXCLUDED.${n}`).join(', ')}`, [id, ...cols])
+  if (type === 'mysql') return db.query(`INSERT INTO flowweb_runs (run_id, ${names.join(', ')}) VALUES (${'?, '.repeat(10)}?) ON DUPLICATE KEY UPDATE ${names.map(n => `${n} = VALUES(${n})`).join(', ')}`, [id, ...cols])
+  await db.query(`UPDATE flowweb_runs SET ${names.map(n => `${n} = ?`).join(', ')} WHERE run_id = ?`, [...cols, id])
+  await db.query(`INSERT INTO flowweb_runs (run_id, ${names.join(', ')}) SELECT ${'?, '.repeat(10)}? WHERE NOT EXISTS (SELECT 1 FROM flowweb_runs WHERE run_id = ?)`, [id, ...cols, id])
+}
+
+const runIdOf = (key: string) => /^runs\/([^/]+)\/result\.json$/.exec(key)?.[1]
+
+function runWhere(q: RunQuery) {
+  const w: string[] = []; const p: unknown[] = []
+  if (q.scenarioId) { w.push('scenario_id = ?'); p.push(q.scenarioId) }
+  if (q.status === 'passed') w.push("status = 'passed'")
+  else if (q.status === 'failed') w.push("status IN ('failed', 'timeout')")
+  else if (q.status === 'cancelled') w.push("status = 'cancelled'")
+  const f = toDate(q.from), t = toDate(q.to)
+  if (f) { w.push('created_at >= ?'); p.push(f) }
+  if (t) { w.push('created_at <= ?'); p.push(t) }
+  return { where: w.length ? ' WHERE ' + w.join(' AND ') : '', p }
+}
+const iso = (v: unknown) => v ? new Date(v as string).toISOString() : undefined
+// Timestamps are written from Date objects; drivers return them as Date (or a string for some mssql setups).
+
+// Returns null when no database is connected (caller falls back to local files).
+export async function dbQueryRuns(q: RunQuery): Promise<RunPage | null> {
+  const db = adapter
+  if (!db) return null
+  try {
+    const pageSize = Math.min(Math.max(Math.trunc(q.pageSize ?? 20) || 20, 1), MAX_PAGE_SIZE)
+    const { where, p } = runWhere(q)
+    const total = Number((await db.query(`SELECT COUNT(*) AS n FROM flowweb_runs${where}`, p))[0]?.n ?? 0)
+    const pages = Math.max(Math.ceil(total / pageSize), 1)
+    const page = Math.min(Math.max(Math.trunc(q.page ?? 1) || 1, 1), pages)
+    const offset = (page - 1) * pageSize
+    const cols = 'run_id, scenario_id, title, status, created_at, started_at, ended_at, duration_ms, error_code, error_message, failed_step'
+    const sql = config.type === 'mssql'
+      ? `SELECT ${cols} FROM flowweb_runs${where} ORDER BY created_at DESC OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`
+      : `SELECT ${cols} FROM flowweb_runs${where} ORDER BY created_at DESC LIMIT ${pageSize} OFFSET ${offset}`
+    const rows = await db.query(sql, p)
+    const items: RunSummary[] = rows.map(r => ({
+      id: String(r.run_id), scenarioId: String(r.scenario_id), title: String(r.title ?? ''), status: r.status, createdAt: iso(r.created_at)!,
+      startedAt: iso(r.started_at), endedAt: iso(r.ended_at), durationMs: r.duration_ms == null ? undefined : Number(r.duration_ms),
+      error: r.error_code ? { code: r.error_code, message: String(r.error_message ?? '') } : undefined,
+      failedStep: r.failed_step ? { id: '', title: String(r.failed_step), index: -1 } : undefined
+    }))
+    return { items, total, page, pageSize, source: 'database' }
+  } catch (error) { console.error('DB run query failed:', error); return null }
+}
+
+// Light rows for the last `days` days (capped) feeding computeStats.
+export async function dbRunRows(days: number, scenarioId?: string): Promise<LightRun[] | null> {
+  const db = adapter
+  if (!db) return null
+  try {
+    const since = new Date(Date.now() - (Math.min(Math.max(days, 1), 90) + 1) * 86400000)
+    const w = 'created_at >= ?' + (scenarioId ? ' AND scenario_id = ?' : '')
+    const p: unknown[] = scenarioId ? [since, scenarioId] : [since]
+    const cols = 'scenario_id, status, created_at, duration_ms'
+    const sql = config.type === 'mssql'
+      ? `SELECT TOP ${MAX_PAGE_SIZE} ${cols} FROM flowweb_runs WHERE ${w} ORDER BY created_at DESC`
+      : `SELECT ${cols} FROM flowweb_runs WHERE ${w} ORDER BY created_at DESC LIMIT ${MAX_PAGE_SIZE}`
+    return (await db.query(sql, p)).map(r => ({ scenarioId: String(r.scenario_id), status: r.status, createdAt: iso(r.created_at)!, durationMs: r.duration_ms == null ? undefined : Number(r.duration_ms) }))
+  } catch (error) { console.error('DB run stats failed:', error); return null }
+}
+
+async function backfillRuns(db: Adapter, type: DbType) {
+  for (const [key, body] of localDocuments()) if (runIdOf(key)) await upsertRun(db, type, body)
+}
+
 const relKey = (file: string) => path.relative(DATA_DIR, file).split(path.sep).join('/')
 const writeLocal = (key: string, body: string) => {
+  if (PROFILE_KEY.test(key)) {
+    try { if (codec) body = codec.toLocal(openPortable(body)); else return } catch (error) { console.error('Could not restore profile from DB (different credentials?):', key, error); return }
+  }
   const file = path.join(DATA_DIR, ...key.split('/'))
   if (!file.startsWith(DATA_DIR + path.sep)) return
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -175,13 +297,27 @@ function localDocuments(): Map<string, string> {
     const file = path.join(runs, id, 'result.json')
     if (fs.existsSync(file)) out.set(`runs/${id}/result.json`, fs.readFileSync(file, 'utf8'))
   }
+  const index = path.join(DATA_DIR, 'profiles.json')
+  if (fs.existsSync(index)) out.set('profiles.json', fs.readFileSync(index, 'utf8'))
+  if (codec) for (const id of codec.list()) {
+    try { const plain = codec.fromLocal(path.join(DATA_DIR, 'profiles', id + '.json')); if (plain) out.set(`profiles/${id}.json`, sealPortable(plain)) } catch (error) { console.error('Profile export failed:', id, error) }
+  }
   return out
+}
+
+function tombAdd(docKey: string) {
+  const tomb = loadTomb(); tomb.add(docKey); saveTomb(tomb)
+  queue.set(docKey, null)
+  void flush()
 }
 
 // Called by the store after a mirrored file/folder is removed.
 export function mirrorDelete(target: string) {
   try {
     const key = relKey(target)
+    if (PROFILE_KEY.test(key)) {
+      tombAdd(key); return
+    }
     const m = /^runs\/([^/]+)(?:\/result\.json)?$/.exec(key)
     if (!m) return
     const docKey = `runs/${m[1]}/result.json`
@@ -210,9 +346,12 @@ async function flush() {
       const [key, body] = queue.entries().next().value as [string, string | null]
       if (body === null) {
         await adapter.query('DELETE FROM flowweb_documents WHERE doc_key = ?', [key])
+        const rid = runIdOf(key)
+        if (rid) await adapter.query('DELETE FROM flowweb_runs WHERE run_id = ?', [rid])
         if (queue.get(key) === null) { queue.delete(key); const tomb = loadTomb(); if (tomb.delete(key)) saveTomb(tomb) }
       } else {
         await upsert(adapter, config.type, key, body)
+        if (runIdOf(key)) await upsertRun(adapter, config.type, body)
         if (queue.get(key) === body) queue.delete(key)
       }
       status = { ...status, lastSync: new Date().toISOString(), error: undefined }
@@ -232,6 +371,7 @@ async function closeAdapter() {
 
 async function connectWith(c: DbConfig, reconnect = false): Promise<{ migrated: number; source: 'database' | 'local' }> {
   await closeAdapter()
+  secretSrc = secretOf(c)
   status = { state: 'connecting', type: c.type, pending: 0 }
   const db = await open(c)
   try {
@@ -240,7 +380,11 @@ async function connectWith(c: DbConfig, reconnect = false): Promise<{ migrated: 
     let source: 'database' | 'local' = 'local'
     // Apply deletions that were made while offline before anything is pulled back.
     const tomb = loadTomb()
-    for (const key of tomb) await db.query('DELETE FROM flowweb_documents WHERE doc_key = ?', [key])
+    for (const key of tomb) {
+      await db.query('DELETE FROM flowweb_documents WHERE doc_key = ?', [key])
+      const rid = runIdOf(key)
+      if (rid) await db.query('DELETE FROM flowweb_runs WHERE run_id = ?', [rid])
+    }
     saveTomb(new Set())
     const live = rows.filter(r => !tomb.has(String(r.doc_key)))
     if (reconnect) {
@@ -252,6 +396,8 @@ async function connectWith(c: DbConfig, reconnect = false): Promise<{ migrated: 
     } else {
       for (const [key, body] of localDocuments()) await upsert(db, c.type, key, body)
     }
+    // Fill the queryable runs table from the (now authoritative) local files, without blocking the connect.
+    void backfillRuns(db, c.type).catch(e => console.error('Run backfill failed:', e))
     adapter = db
     config = c
     status = { state: 'connected', type: c.type, pending: 0, lastSync: new Date().toISOString(), migrated, source }

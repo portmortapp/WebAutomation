@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { Extraction, FormField, PickRequest, ScenarioStep, ValueSource } from '../shared/types'
 import { defaultExtraction, stepLabels } from '../shared/steps'
 import { ContextMenu } from './ContextMenu'
@@ -72,7 +72,34 @@ function FormEditor({ step, onChange, pick, canPick, secretNames }: { step: Extr
   </>
 }
 
-export function StepEditor({ step, onChange, pick, canPick, locked, secretNames, later = [] }: Props) {
+// Typing updates a local copy immediately and pushes to the (heavy) Studio state after a short pause,
+// so the canvas, output panel and conversions are not re-rendered on every keystroke.
+export function StepEditor(props: Props) {
+  const [local, setLocal] = useState(props.step)
+  const pending = useRef<ScenarioStep | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const push = useRef(props.onChange)
+  push.current = props.onChange
+  const flush = () => {
+    clearTimeout(timer.current)
+    const value = pending.current
+    pending.current = null
+    if (value) push.current(value)
+  }
+  useEffect(() => {
+    if (props.step.id !== local.id) { flush(); setLocal(props.step) }
+    else if (!pending.current) setLocal(props.step)
+  }, [props.step])
+  useEffect(() => flush, [])
+  const onChange = (value: ScenarioStep) => {
+    setLocal(value); pending.current = value
+    clearTimeout(timer.current)
+    timer.current = setTimeout(flush, 250)
+  }
+  return <div onBlurCapture={flush} style={{ display: 'contents' }}><StepEditorForm {...props} step={local} onChange={onChange} /></div>
+}
+
+function StepEditorForm({ step, onChange, pick, canPick, locked, secretNames, later = [] }: Props) {
   return <fieldset disabled={locked} className="step-form">
     <div className="section-heading"><div className="step-name-heading"><span className="eyebrow">{stepLabels[step.type]}</span><input className="step-name" aria-label="عنوان مرحله" value={step.title} onChange={e => onChange({ ...step, title: e.target.value })} /></div><span className="type-icon">{typeIcons[step.type] ?? '↗'}</span></div>
     {step.type === 'navigate' && <SourceEditor label="آدرس صفحه" secretNames={secretNames} value={step.url} onChange={url => onChange({ ...step, url })} />}

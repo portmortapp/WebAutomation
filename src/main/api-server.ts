@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import { getScenario, getScenarios, getSettings, listArtifacts, listRuns, readArtifact } from './store'
 import type { ScenarioRunner } from './runner'
 import { QueueFullError, ValidationError, validateRunRequest } from '../shared/validation'
+import { isTerminalStatus } from '../shared/types'
 import type { ApiCallRequest, ApiCallResult, ApiStatus, ApiTestResult, AppSettings, JsonValue } from '../shared/types'
 
 let server: Server | null = null
@@ -133,7 +134,10 @@ export async function startApiServer(runner: ScenarioRunner, settings: AppSettin
     res.json(scenario)
   })
 
-  api.post('/api/scenarios/:id/run', (req, res) => {
+  api.post('/api/scenarios/:id/run', (req, res, next) => {
+    runScenario(req, res).catch(next) // Express 4 does not catch async rejections
+  })
+  const runScenario = async (req: express.Request, res: express.Response) => {
     const scenario = getScenario(req.params.id)
 
     if (!scenario) {
@@ -143,11 +147,30 @@ export async function startApiServer(runner: ScenarioRunner, settings: AppSettin
 
     const run = runner.enqueue(scenario, validateRunRequest(req.body))
 
-    res.status(202).json({
-      message: 'Run queued',
-      run
-    })
-  })
+    // By default the response is held until the run finishes; ?wait=false (or 0) returns immediately with 202.
+    // ?waitTimeout=<seconds> caps it (default 300, max 3600).
+    const waitFlag = String(req.query.wait ?? '').toLowerCase()
+    if (waitFlag === 'false' || waitFlag === '0') {
+      res.status(202).json({ message: 'Run queued', run })
+      return
+    }
+    const secs = Number(req.query.waitTimeout)
+    const limitMs = (Number.isFinite(secs) && secs > 0 ? Math.min(secs, 3600) : 300) * 1000
+    const deadline = Date.now() + limitMs
+    let closed = false
+    res.on('close', () => { closed = true })
+    let current = runner.getRun(run.id) ?? run
+    while (!isTerminalStatus(current.status) && Date.now() < deadline && !closed) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      current = runner.getRun(run.id) ?? current
+    }
+    if (closed) return // client left; the run keeps going
+    if (!isTerminalStatus(current.status)) {
+      res.status(202).json({ message: 'Run still in progress', run: current })
+      return
+    }
+    res.status(current.status === 'passed' ? 200 : 422).json({ message: 'Run ' + current.status, run: current })
+  }
 
   api.get('/api/runs', (req, res) => {
     const scenarioId = typeof req.query.scenarioId === 'string' ? req.query.scenarioId : undefined

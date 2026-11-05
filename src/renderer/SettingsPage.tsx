@@ -2,10 +2,11 @@ import { useState } from 'react'
 import type { AppSettings, ProfileInfo, SecretInfo } from '../shared/types'
 import { ApiConnection } from './ApiConnection'
 import { DatabaseConnection } from './DatabaseConnection'
+import { RunsManager } from './RunsManager'
 import { ApiGuide } from './ApiGuide'
 import { ApiTester } from './ApiTester'
 
-type Tab = 'api' | 'database' | 'secrets' | 'profiles' | 'about'
+type Tab = 'api' | 'runs' | 'database' | 'secrets' | 'profiles' | 'about'
 
 interface Props {
   settings: AppSettings | null
@@ -31,7 +32,7 @@ interface Props {
 // Connection (API) with status and tests, stored secrets, and saved login profiles, one topic per tab.
 export function SettingsPage({ settings, savedSettings, settingsVersion, setSettings, secrets, profiles, scenarios, secretName, secretValue, setSecretName, setSecretValue, addSecret, removeSecret, removeProfile, scenarioId, busy, onSave, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('api')
-  const tabs: [Tab, string, number | null][] = [['api', 'اتصال API', null], ['database', 'پایگاه داده', null], ['secrets', 'رمزها', secrets.length], ['profiles', 'پروفایل‌های ورود', profiles.length], ['about', 'درباره', null]]
+  const tabs: [Tab, string, number | null][] = [['api', 'اتصال API', null], ['runs', 'اجرای هم‌زمان', null], ['database', 'پایگاه داده', null], ['secrets', 'رمزها', secrets.length], ['profiles', 'پروفایل‌های ورود', profiles.length], ['about', 'درباره', null]]
   return <div className="settings-page">
     <button className="text-button" onClick={onBack}>→ بازگشت به سناریو</button>
     <span className="eyebrow">SETTINGS</span><h1>تنظیمات</h1>
@@ -43,6 +44,8 @@ export function SettingsPage({ settings, savedSettings, settingsVersion, setSett
       <div className="settings-card"><ApiGuide port={settings.port} token={settings.token} scenarioId={scenarioId} /></div>
       {scenarios.length > 0 && <div className="settings-card"><ApiTester scenarios={scenarios} scenarioId={scenarioId} /></div>}
     </> : <p>در حال دریافت تنظیمات…</p>)}
+
+    {tab === 'runs' && (settings ? <RunsManager settings={settings} saved={savedSettings} setSettings={setSettings} busy={busy} onSave={onSave} /> : <p>در حال دریافت تنظیمات…</p>)}
 
     {tab === 'database' && <DatabaseConnection />}
     {tab === 'about' && <div className="settings-card about-card"><img src="./icon.png" alt="webautomation" className="about-logo" /><h2>webautomation</h2><p className="muted">powered by portmort</p><div className="dev-card"><span>توسعه‌دهنده</span><strong>Rasol Alibakhshi</strong><button className="primary" onClick={() => void window.electronAPI.openDeveloper?.()}>GitHub ↗</button><code>github.com/RasolAlibakhshi</code></div><div className="donate-card"><span>❤ حمایت از پروژه</span><p>اگر webautomation برایتان مفید بود، با دونیت از توسعه آن حمایت کنید.</p><button className="primary" onClick={() => void window.electronAPI.openDonate?.()}>حمایت مالی (دونیت) ↗</button><code>daramet.com/PortMort</code></div></div>}

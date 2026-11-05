@@ -1,6 +1,7 @@
 // src/main/index.ts
-import { app, BrowserWindow, Notification, ipcMain, Menu, Tray, nativeImage, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, dialog, BrowserWindow, Notification, ipcMain, Menu, Tray, nativeImage, shell, type IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
+import fs from 'node:fs'
 import { configureBrowserPath, warnIfChromiumMissing } from './browser-setup'
 
 configureBrowserPath()
@@ -14,6 +15,8 @@ import {
   saveSettings,
   listRuns,
   readArtifact,
+  artifactPath,
+  deleteArtifact,
   listProfiles,
   deleteProfile,
   saveProfileState,
@@ -39,6 +42,8 @@ import { recordCodegen, stopCodegen } from './codegen'
 import { validateSettings } from '../shared/validation'
 import { initDb, closeDb, publicConfig, getDbStatus, testDb, saveDb } from './db-sync'
 import { Inspector } from './inspector'
+import { queryRuns, runStats } from './run-report'
+import type { RunQuery } from '../shared/run-report'
 import { startScheduler, stopScheduler, listSchedules, saveSchedule, deleteSchedule, deleteSchedulesFor, runScheduleNow, handleRunFinished, retargetScheduledRun } from './scheduler'
 import type { SaveScheduleInput } from '../shared/schedule'
 import type { AppSettings, SaveScenarioInput, RunRequest, ScenarioStep, JsonValue, PickRequest } from '../shared/types'
@@ -236,10 +241,28 @@ function registerIpc() {
   })
 
   handle('runs:list', (_event, scenarioId?: string, limit?: number) => listRuns(typeof scenarioId === 'string' ? scenarioId : undefined, limit))
+  handle('runs:query', (_event, query: RunQuery) => queryRuns(query ?? {}))
+  handle('runs:stats', (_event, days: number, scenarioId?: string) => runStats(Number(days), typeof scenarioId === 'string' ? scenarioId : undefined))
   handle('runs:artifact', (_event, runId: string, name: string) => {
     const file = readArtifact(runId, name)
     return file ? 'data:image/png;base64,' + file.toString('base64') : null
   })
+  handle('runs:artifact-open', async (_event, runId: string, name: string) => {
+    const file = artifactPath(String(runId), String(name))
+    if (!file) return false
+    return (await shell.openPath(file)) === ''
+  })
+  handle('runs:artifact-save', async (_event, runId: string, name: string) => {
+    const file = artifactPath(String(runId), String(name))
+    if (!file) return false
+    const win = BrowserWindow.getFocusedWindow()
+    const options = { defaultPath: path.join(app.getPath('downloads'), String(runId).slice(0, 12) + '-' + name), filters: [{ name: 'PNG', extensions: ['png'] }] }
+    const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return false
+    fs.copyFileSync(file, result.filePath)
+    return true
+  })
+  handle('runs:artifact-delete', (_event, runId: string, name: string) => deleteArtifact(String(runId), String(name)))
   handle('profiles:list', () => listProfiles())
   handle('profiles:delete', (_event, id: string) => deleteProfile(id))
   handle('profiles:capture', async (_event, name: string, existingId?: string) => saveProfileState(name, await inspector.captureSession(), existingId))
